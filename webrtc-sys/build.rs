@@ -48,6 +48,7 @@ fn main() {
         "src/audio_resampler.rs",
         "src/android.rs",
         "src/prohibit_libsrtp_initialization.rs",
+        "src/desktop_capturer.rs",
     ]);
 
     builder.files(&[
@@ -75,6 +76,7 @@ fn main() {
         "src/frame_cryptor.cpp",
         "src/global_task_queue.cpp",
         "src/prohibit_libsrtp_initialization.cpp",
+        "src/desktop_capturer.cpp",
     ]);
 
     let webrtc_dir = webrtc_sys_build::webrtc_dir();
