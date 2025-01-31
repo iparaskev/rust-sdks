@@ -31,25 +31,28 @@ pub struct DesktopCapturer {
 }
 
 impl DesktopCapturer {
-    pub fn new<T>(callback: T) -> Self
+    pub fn new<T>(callback: T, window_capturer: bool) -> Self
     where
         T: Fn(DesktopFrame) + Send + 'static,
     {
         let inner_callback = move |frame: imp_dc::DesktopFrame| {
             callback(DesktopFrame::new(frame));
         };
-        let inner = Arc::new(Mutex::new((DesktopCapturerInner {
-            handle: imp_dc::DesktopCapturer::new(inner_callback),
+        let inner = Arc::new(Mutex::new(DesktopCapturerInner {
+            handle: imp_dc::DesktopCapturer::new(inner_callback, window_capturer),
             tx: None,
-        })));
+        }));
         Self { inner }
     }
 
-    pub fn start_capture(&self) {
+    pub fn start_capture(&self, source: CaptureSource) {
         let (tx, mut rx) = mpsc::unbounded_channel();
         {
             let mut inner = self.inner.lock().unwrap();
             inner.tx = Some(tx);
+
+            inner.handle.select_source(source.sys_handle.id());
+            inner.handle.start();
         }
         let inner = self.inner.clone();
         livekit_runtime::spawn(async move {
@@ -75,6 +78,15 @@ impl DesktopCapturer {
             tx.send(Message::StopCapture).unwrap();
         }
         inner.tx.take();
+    }
+
+    pub fn get_source_list(&self) -> Vec<CaptureSource> {
+        let inner = self.inner.lock().unwrap();
+        let source_list = inner.handle.get_source_list();
+        source_list
+            .into_iter()
+            .map(|source| CaptureSource { sys_handle: source })
+            .collect()
     }
 }
 
@@ -104,5 +116,31 @@ impl DesktopFrame {
     }
     pub fn data(&self) -> &[u8] {
         &self.sys_handle.data()
+    }
+}
+
+pub struct CaptureSource {
+    pub(crate) sys_handle: imp_dc::CaptureSource,
+}
+
+impl CaptureSource {
+    pub fn id(&self) -> u64 {
+        self.sys_handle.id()
+    }
+    pub fn title(&self) -> String {
+        self.sys_handle.title()
+    }
+    pub fn display_id(&self) -> i64 {
+        self.sys_handle.display_id()
+    }
+}
+
+impl std::fmt::Display for CaptureSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CaptureSource")
+            .field("id", &self.id())
+            .field("title", &self.title())
+            .field("display_id", &self.display_id())
+            .finish()
     }
 }

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str;
-
-use cxx::UniquePtr;
+use cxx::{CxxVector, UniquePtr};
 use webrtc_sys::desktop_capturer::{self as sys_dc, ffi::new_desktop_capturer};
 
 pub struct DesktopCapturer {
@@ -22,16 +20,34 @@ pub struct DesktopCapturer {
 }
 
 impl DesktopCapturer {
-    pub fn new<T>(callback: T) -> Self
+    pub fn new<T>(callback: T, window_capturer: bool) -> Self
         where T: Fn(DesktopFrame) + Send + 'static {
         let callback = DesktopCallback::new(callback);
         let callback_wrapper = sys_dc::DesktopCapturerCallbackWrapper::new(Box::new(callback));
-        let sys_handle = new_desktop_capturer(Box::new(callback_wrapper));
+        let sys_handle = new_desktop_capturer(Box::new(callback_wrapper), window_capturer);
         Self { sys_handle }
     }
 
     pub fn capture_frame(&self) {
         self.sys_handle.capture_frame();
+    }
+
+    pub fn start(&mut self) {
+        let pin_handle = self.sys_handle.pin_mut();
+        pin_handle.start();
+    }
+
+    pub fn select_source(&self, id: u64) -> bool {
+        self.sys_handle.select_source(id)
+    }
+
+    pub fn get_source_list(&self) -> Vec<CaptureSource> {
+        let mut sources = Vec::new();
+        let source_list = self.sys_handle.get_source_list();
+        for source in source_list.iter() {
+            sources.push(CaptureSource { sys_handle: source.clone() });
+        }
+        sources
     }
 }
 
@@ -77,5 +93,23 @@ impl<T> sys_dc::DesktopCapturerCallback for DesktopCallback<T>
     where T: Fn(DesktopFrame) + Send {
     fn on_capture_result(&self, frame: UniquePtr<sys_dc::ffi::DesktopFrame>) {
         (self.callback)(DesktopFrame::new(frame));
+    }
+}
+
+pub struct CaptureSource {
+    pub(crate) sys_handle: sys_dc::ffi::Source,
+}
+
+impl CaptureSource {
+    pub fn id(&self) -> u64 {
+        self.sys_handle.id
+    }
+
+    pub fn title(&self) -> String {
+         self.sys_handle.title.clone()
+    }
+
+    pub fn display_id(&self) -> i64 {
+        self.sys_handle.display_id
     }
 }

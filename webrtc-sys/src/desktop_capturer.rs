@@ -12,20 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cxx::UniquePtr;
+use cxx::{CxxVector, UniquePtr};
 
-use crate::{impl_thread_safety, desktop_capturer::ffi::DesktopFrame};
+use crate::{desktop_capturer::ffi::DesktopFrame, impl_thread_safety};
 
 #[cxx::bridge(namespace = "livekit")]
 pub mod ffi {
+    #[derive(Clone)]
+    struct Source {
+        id: u64,
+        title: String,
+        display_id: i64,
+    }
+
     unsafe extern "C++" {
         include!("livekit/desktop_capturer.h");
 
         type DesktopCapturer;
         type DesktopFrame;
 
-        fn new_desktop_capturer(callback: Box<DesktopCapturerCallbackWrapper>) -> UniquePtr<DesktopCapturer>;
+        fn new_desktop_capturer(
+            callback: Box<DesktopCapturerCallbackWrapper>,
+            window_capturer: bool,
+        ) -> UniquePtr<DesktopCapturer>;
         fn capture_frame(self: &DesktopCapturer);
+        fn get_source_list(self: &DesktopCapturer) -> Vec<Source>;
+        fn select_source(self: &DesktopCapturer, id: u64) -> bool;
+        fn start(self: Pin<&mut DesktopCapturer>);
+
         fn width(self: &DesktopFrame) -> i32;
         fn height(self: &DesktopFrame) -> i32;
         fn stride(self: &DesktopFrame) -> i32;

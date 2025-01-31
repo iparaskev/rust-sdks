@@ -84,8 +84,17 @@ async fn main() {
 
         buffer_source_clone.capture_frame(&*framebuffer);
     };
-    let mut capturer = DesktopCapturer::new(callback);
-    capturer.start_capture();
-    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-    capturer.stop_capture();
+    let mut capturer = DesktopCapturer::new(callback, true);
+    let sources = capturer.get_source_list();
+    for source in sources {
+        println!("Source: {}", source);
+    }
+    /* let mut capturer = DesktopCapturer::new(callback, true);
+    let sources = capturer.get_source_list();
+    for source in sources {
+        println!("Source: {}", source);
+    } */
+    //capturer.start_capture();
+    //tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    //capturer.stop_capture();
 }

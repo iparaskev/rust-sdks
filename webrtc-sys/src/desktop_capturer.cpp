@@ -16,19 +16,30 @@
 
 #include "livekit/desktop_capturer.h"
 
-#include "modules/desktop_capture/desktop_capture_options.h"
+using SourceList = webrtc::DesktopCapturer::SourceList;
 
 namespace livekit {
-DesktopCapturer::DesktopCapturer(rust::Box<DesktopCapturerCallbackWrapper> callback)
-    : callback(std::move(callback)) {
-  auto options = webrtc::DesktopCaptureOptions::CreateDefault();
-  capturer = webrtc::DesktopCapturer::CreateScreenCapturer(options);
-  capturer->Start(this);
-}
+DesktopCapturer::DesktopCapturer(
+    rust::Box<DesktopCapturerCallbackWrapper> callback,
+    std::unique_ptr<webrtc::DesktopCapturer> capturer)
+    : callback(std::move(callback)), capturer(std::move(capturer)) {}
 
 void DesktopCapturer::OnCaptureResult(
     webrtc::DesktopCapturer::Result result,
     std::unique_ptr<webrtc::DesktopFrame> frame) {
   callback->on_capture_result(std::make_unique<DesktopFrame>(std::move(frame)));
+}
+
+rust::Vec<Source> DesktopCapturer::get_source_list() const {
+  SourceList list{};
+  bool res = capturer->GetSourceList(&list);
+  rust::Vec<Source> source_list{};
+  if (res) {
+    for (auto& source : list) {
+      source_list.push_back(Source{static_cast<uint64_t>(source.id),
+                                   source.title, source.display_id});
+    }
+  }
+  return source_list;
 }
 }  // namespace livekit
