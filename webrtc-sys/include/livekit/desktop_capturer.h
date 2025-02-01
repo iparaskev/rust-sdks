@@ -34,7 +34,8 @@ namespace livekit {
 class DesktopCapturer : public webrtc::DesktopCapturer::Callback {
  public:
   explicit DesktopCapturer(rust::Box<DesktopCapturerCallbackWrapper> callback,
-                           std::unique_ptr<webrtc::DesktopCapturer> capturer);
+                           std::unique_ptr<webrtc::DesktopCapturer> capturer,
+                           std::unique_ptr<webrtc::DesktopCapturer> sources_capturer);
 
   void OnCaptureResult(webrtc::DesktopCapturer::Result result,
                        std::unique_ptr<webrtc::DesktopFrame> frame) final;
@@ -46,6 +47,10 @@ class DesktopCapturer : public webrtc::DesktopCapturer::Callback {
 
  private:
   std::unique_ptr<webrtc::DesktopCapturer> capturer;
+  // TODO: This is a workaround for fetching the source list
+  // it will be removed once the SCContentSharingPicker will be
+  // integrated.
+  std::unique_ptr<webrtc::DesktopCapturer> sources_capturer;
   rust::Box<DesktopCapturerCallbackWrapper> callback;
 };
 
@@ -70,17 +75,30 @@ static std::unique_ptr<DesktopCapturer> new_desktop_capturer(
     bool window_capturer) {
   webrtc::DesktopCaptureOptions options =
       webrtc::DesktopCaptureOptions::CreateDefault();
+#ifdef __APPLE__
+  options.set_allow_sck_capturer(true);
+#endif
   std::unique_ptr<webrtc::DesktopCapturer> capturer = nullptr;
+  std::unique_ptr<webrtc::DesktopCapturer> sources_capturer = nullptr;
   if (window_capturer) {
     capturer = webrtc::DesktopCapturer::CreateWindowCapturer(options);
+#ifdef __APPLE__
+    options.set_allow_sck_capturer(false);
+#endif
+    sources_capturer = webrtc::DesktopCapturer::CreateWindowCapturer(options);
   } else {
     capturer = webrtc::DesktopCapturer::CreateScreenCapturer(options);
+#ifdef __APPLE__
+    options.set_allow_sck_capturer(false);
+#endif
+    sources_capturer = webrtc::DesktopCapturer::CreateScreenCapturer(options);
   }
-  if (!capturer) {
+  if (!capturer || !sources_capturer) {
     return nullptr;
   }
   return std::make_unique<DesktopCapturer>(std::move(callback),
-                                           std::move(capturer));
+                                           std::move(capturer),
+                                           std::move(sources_capturer));
 }
 
 }  // namespace livekit

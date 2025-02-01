@@ -21,18 +21,24 @@ using SourceList = webrtc::DesktopCapturer::SourceList;
 namespace livekit {
 DesktopCapturer::DesktopCapturer(
     rust::Box<DesktopCapturerCallbackWrapper> callback,
-    std::unique_ptr<webrtc::DesktopCapturer> capturer)
-    : callback(std::move(callback)), capturer(std::move(capturer)) {}
+    std::unique_ptr<webrtc::DesktopCapturer> capturer,
+    std::unique_ptr<webrtc::DesktopCapturer> sources_capturer)
+    : callback(std::move(callback)),
+      capturer(std::move(capturer)),
+      sources_capturer(std::move(sources_capturer)) {}
 
 void DesktopCapturer::OnCaptureResult(
     webrtc::DesktopCapturer::Result result,
     std::unique_ptr<webrtc::DesktopFrame> frame) {
+  if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
+    return;
+  }
   callback->on_capture_result(std::make_unique<DesktopFrame>(std::move(frame)));
 }
 
 rust::Vec<Source> DesktopCapturer::get_source_list() const {
   SourceList list{};
-  bool res = capturer->GetSourceList(&list);
+  bool res = sources_capturer->GetSourceList(&list);
   rust::Vec<Source> source_list{};
   if (res) {
     for (auto& source : list) {
