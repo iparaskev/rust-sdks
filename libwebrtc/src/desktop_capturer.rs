@@ -119,6 +119,7 @@ impl DesktopFrame {
     }
 }
 
+#[derive(Clone)]
 pub struct CaptureSource {
     pub(crate) sys_handle: imp_dc::CaptureSource,
 }

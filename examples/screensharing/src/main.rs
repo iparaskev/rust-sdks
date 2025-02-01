@@ -86,9 +86,11 @@ async fn main() {
     };
     let mut capturer = DesktopCapturer::new(callback, true);
     let sources = capturer.get_source_list();
-    for source in sources {
+    for source in sources.iter() {
         println!("Source: {}", source);
     }
+    let source = sources[0].clone();
+    capturer.start_capture(source);
     /* let mut capturer = DesktopCapturer::new(callback, true);
     let sources = capturer.get_source_list();
     for source in sources {

@@ -96,6 +96,7 @@ impl<T> sys_dc::DesktopCapturerCallback for DesktopCallback<T>
     }
 }
 
+#[derive(Clone)]
 pub struct CaptureSource {
     pub(crate) sys_handle: sys_dc::ffi::Source,
 }
