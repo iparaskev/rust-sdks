@@ -26,6 +26,8 @@ struct DesktopCapturerInner {
     tx: Option<mpsc::UnboundedSender<Message>>,
 }
 
+#[derive(Clone)]
+/// Can be cloned and sent across threads
 pub struct DesktopCapturer {
     inner: Arc<Mutex<DesktopCapturerInner>>,
 }
@@ -45,6 +47,8 @@ impl DesktopCapturer {
         Self { inner }
     }
 
+    /// Needs a tokio runtime to run
+    /// TODO: Maybe remove this
     pub fn start_capture(&self, source: CaptureSource) {
         let (tx, mut rx) = mpsc::unbounded_channel();
         {
@@ -70,6 +74,21 @@ impl DesktopCapturer {
                 }
             }
         });
+    }
+
+    pub fn select_source(&self, source: CaptureSource) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.handle.select_source(source.sys_handle.id());
+    }
+
+    pub fn start(&self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.handle.start();
+    }
+
+    pub fn capture_frame(&self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.handle.capture_frame();
     }
 
     pub fn stop_capture(&self) {
