@@ -133,6 +133,12 @@ impl DesktopFrame {
     pub fn stride(&self) -> u32 {
         self.sys_handle.stride() as u32
     }
+    pub fn left(&self) -> i32 {
+        self.sys_handle.left()
+    }
+    pub fn top(&self) -> i32 {
+        self.sys_handle.top()
+    }
     pub fn data(&self) -> &[u8] {
         &self.sys_handle.data()
     }

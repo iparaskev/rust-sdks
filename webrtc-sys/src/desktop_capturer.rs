@@ -43,6 +43,8 @@ pub mod ffi {
         fn width(self: &DesktopFrame) -> i32;
         fn height(self: &DesktopFrame) -> i32;
         fn stride(self: &DesktopFrame) -> i32;
+        fn left(self: &DesktopFrame) -> i32;
+        fn top(self: &DesktopFrame) -> i32;
         fn data(self: &DesktopFrame) -> *const u8;
     }
 

@@ -62,6 +62,10 @@ class DesktopFrame {
 
   int32_t height() const { return frame->size().height(); }
 
+  int32_t left() const { return frame->rect().left(); }
+
+  int32_t top() const { return frame->rect().top(); }
+
   int32_t stride() const { return frame->stride(); }
 
   const uint8_t* data() const { return frame->data(); }

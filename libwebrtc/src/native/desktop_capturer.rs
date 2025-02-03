@@ -72,6 +72,14 @@ impl DesktopFrame {
         self.sys_handle.stride() as u32
     }
 
+    pub fn left(&self) -> i32 {
+        self.sys_handle.left()
+    }
+
+    pub fn top(&self) -> i32 {
+        self.sys_handle.top()
+    }
+
     pub fn data(&self) -> &[u8] {
         let data = self.sys_handle.data();
         unsafe {std::slice::from_raw_parts(data, self.stride() as usize * self.height() as usize)}
