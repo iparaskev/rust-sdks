@@ -1,0 +1,33 @@
+From a5c5ff46117556ec79acb3e3c56a42887bc9d75c Mon Sep 17 00:00:00 2001
+From: Bjorn Terelius <terelius@webrtc.org>
+Date: Fri, 18 Oct 2024 07:15:22 +0200
+Subject: [PATCH 21/28] Disable WindowFinderTest.FindConsoleWindow due to
+ flakiness
+
+Bug: webrtc:373792116
+Change-Id: I5b5ec2a090934248d1ce5e243d53aceb463e6db2
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/366003
+Commit-Queue: Harald Alvestrand <hta@webrtc.org>
+Reviewed-by: Harald Alvestrand <hta@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#43259}
+---
+ modules/desktop_capture/window_finder_unittest.cc | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/modules/desktop_capture/window_finder_unittest.cc b/modules/desktop_capture/window_finder_unittest.cc
+index baf4b86c89..e30d715494 100644
+--- a/modules/desktop_capture/window_finder_unittest.cc
++++ b/modules/desktop_capture/window_finder_unittest.cc
+@@ -40,7 +40,8 @@ namespace {
+ // ScreenDrawerWin does not have a message loop, so it's unresponsive to user
+ // inputs. WindowFinderWin cannot detect this kind of unresponsive windows.
+ // Instead, console window is used to test WindowFinderWin.
+-TEST(WindowFinderTest, FindConsoleWindow) {
++// TODO(b/373792116): Reenable once flakiness is fixed.
++TEST(WindowFinderTest, DISABLED_FindConsoleWindow) {
+   // Creates a ScreenDrawer to avoid this test from conflicting with
+   // ScreenCapturerIntegrationTest: both tests require its window to be in
+   // foreground.
+-- 
+2.42.0
+

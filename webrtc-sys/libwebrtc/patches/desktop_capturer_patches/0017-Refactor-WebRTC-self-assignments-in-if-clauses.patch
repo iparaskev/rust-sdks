@@ -1,0 +1,48 @@
+From ab009c27b4ff22b15f81a2de730f3075bf676cfd Mon Sep 17 00:00:00 2001
+From: Benjamin Williams <bwwilliams@google.com>
+Date: Fri, 23 Aug 2024 13:51:10 -0400
+Subject: [PATCH 17/28] Refactor WebRTC self assignments in if clauses
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This change refactors existing self-assignments within if clauses across
+the WebRTC codebase.
+
+*Why:*
+
+- Bug Prevention: Assignments within conditionals are frequently
+  unintended errors, often mistaken for equality checks.
+
+- Clearer Code: Separating assignments from conditionals improves code
+  readability and reduces the risk of misinterpretation.
+
+Change-Id: I199dc26a35ceca109a2ac569b446811314dfdf0b
+Bug: chromium:361594695
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/360460
+Reviewed-by: Chuck Hays <haysc@webrtc.org>
+Reviewed-by: Kári Helgason <kthelgason@webrtc.org>
+Commit-Queue: Kári Helgason <kthelgason@webrtc.org>
+Reviewed-by: Harald Alvestrand <hta@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#42850}
+---
+ modules/desktop_capture/mac/screen_capturer_sck.mm | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/modules/desktop_capture/mac/screen_capturer_sck.mm b/modules/desktop_capture/mac/screen_capturer_sck.mm
+index 2dad8b356b..fe44694d3a 100644
+--- a/modules/desktop_capture/mac/screen_capturer_sck.mm
++++ b/modules/desktop_capture/mac/screen_capturer_sck.mm
+@@ -370,7 +370,8 @@ std::unique_ptr<DesktopCapturer> CreateScreenCapturerSck(const DesktopCaptureOpt
+ }
+ 
+ - (instancetype)initWithCapturer:(webrtc::ScreenCapturerSck*)capturer {
+-  if (self = [super init]) {
++  self = [super init];
++  if (self) {
+     _capturer = capturer;
+   }
+   return self;
+-- 
+2.42.0
+

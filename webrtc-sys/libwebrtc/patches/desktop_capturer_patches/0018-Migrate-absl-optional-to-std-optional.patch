@@ -1,0 +1,206 @@
+From 8037fc6ffa131805248c2a63c3edec69155b05cf Mon Sep 17 00:00:00 2001
+From: Florent Castelli <orphis@webrtc.org>
+Date: Thu, 29 Aug 2024 13:00:40 +0000
+Subject: [PATCH 18/28] Migrate absl::optional to std::optional
+
+Bug: webrtc:342905193
+No-Try: True
+Change-Id: Icc968be43b8830038ea9a1f5f604307220457807
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/361021
+Auto-Submit: Florent Castelli <orphis@webrtc.org>
+Reviewed-by: Harald Alvestrand <hta@webrtc.org>
+Commit-Queue: Florent Castelli <orphis@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#42911}
+---
+ modules/desktop_capture/BUILD.gn                      |  1 -
+ modules/desktop_capture/linux/wayland/egl_dmabuf.cc   | 11 ++++++-----
+ modules/desktop_capture/linux/wayland/egl_dmabuf.h    |  4 ++--
+ .../linux/wayland/mouse_cursor_monitor_pipewire.cc    |  2 +-
+ .../linux/wayland/screencast_stream_utils.cc          |  6 +++---
+ .../linux/wayland/shared_screencast_stream.cc         |  4 ++--
+ .../linux/wayland/shared_screencast_stream.h          |  4 ++--
+ modules/desktop_capture/win/wgc_capture_source.h      |  4 ++--
+ 8 files changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/modules/desktop_capture/BUILD.gn b/modules/desktop_capture/BUILD.gn
+index ddbf3c3d58..4ea31b9db7 100644
+--- a/modules/desktop_capture/BUILD.gn
++++ b/modules/desktop_capture/BUILD.gn
+@@ -280,7 +280,6 @@ rtc_library("desktop_capture") {
+     "//third_party/abseil-cpp/absl/memory",
+     "//third_party/abseil-cpp/absl/strings",
+     "//third_party/abseil-cpp/absl/strings:string_view",
+-    "//third_party/abseil-cpp/absl/types:optional",
+   ]
+   public_configs = [ ":x11_config" ]
+   sources = [
+diff --git a/modules/desktop_capture/linux/wayland/egl_dmabuf.cc b/modules/desktop_capture/linux/wayland/egl_dmabuf.cc
+index b529077c6d..fff976468c 100644
+--- a/modules/desktop_capture/linux/wayland/egl_dmabuf.cc
++++ b/modules/desktop_capture/linux/wayland/egl_dmabuf.cc
+@@ -19,8 +19,9 @@
+ #include <unistd.h>
+ #include <xf86drm.h>
+ 
++#include <optional>
++
+ #include "absl/memory/memory.h"
+-#include "absl/types/optional.h"
+ #include "rtc_base/checks.h"
+ #include "rtc_base/logging.h"
+ #include "rtc_base/sanitizer.h"
+@@ -369,7 +370,7 @@ EglDmaBuf::EglDmaBuf() {
+     RTC_LOG(LS_ERROR) << "Failed to obtain default EGL display: "
+                       << FormatEGLError(EglGetError()) << "\n"
+                       << "Defaulting to using first available render node";
+-    absl::optional<std::string> render_node = GetRenderNode();
++    std::optional<std::string> render_node = GetRenderNode();
+     if (!render_node) {
+       return;
+     }
+@@ -724,19 +725,19 @@ std::vector<uint64_t> EglDmaBuf::QueryDmaBufModifiers(uint32_t format) {
+   return modifiers;
+ }
+ 
+-absl::optional<std::string> EglDmaBuf::GetRenderNode() {
++std::optional<std::string> EglDmaBuf::GetRenderNode() {
+   int max_devices = drmGetDevices2(0, nullptr, 0);
+   if (max_devices <= 0) {
+     RTC_LOG(LS_ERROR) << "drmGetDevices2() has not found any devices (errno="
+                       << -max_devices << ")";
+-    return absl::nullopt;
++    return std::nullopt;
+   }
+ 
+   std::vector<drmDevicePtr> devices(max_devices);
+   int ret = drmGetDevices2(0, devices.data(), max_devices);
+   if (ret < 0) {
+     RTC_LOG(LS_ERROR) << "drmGetDevices2() returned an error " << ret;
+-    return absl::nullopt;
++    return std::nullopt;
+   }
+ 
+   std::string render_node;
+diff --git a/modules/desktop_capture/linux/wayland/egl_dmabuf.h b/modules/desktop_capture/linux/wayland/egl_dmabuf.h
+index 22a8f5ab52..61dd2b144a 100644
+--- a/modules/desktop_capture/linux/wayland/egl_dmabuf.h
++++ b/modules/desktop_capture/linux/wayland/egl_dmabuf.h
+@@ -16,10 +16,10 @@
+ #include <gbm.h>
+ 
+ #include <memory>
++#include <optional>
+ #include <string>
+ #include <vector>
+ 
+-#include "absl/types/optional.h"
+ #include "modules/desktop_capture/desktop_geometry.h"
+ 
+ namespace webrtc {
+@@ -66,7 +66,7 @@ class EglDmaBuf {
+   GLuint texture_ = 0;
+   EGLStruct egl_;
+ 
+-  absl::optional<std::string> GetRenderNode();
++  std::optional<std::string> GetRenderNode();
+ };
+ 
+ }  // namespace webrtc
+diff --git a/modules/desktop_capture/linux/wayland/mouse_cursor_monitor_pipewire.cc b/modules/desktop_capture/linux/wayland/mouse_cursor_monitor_pipewire.cc
+index 00b07f341b..21f550bea2 100644
+--- a/modules/desktop_capture/linux/wayland/mouse_cursor_monitor_pipewire.cc
++++ b/modules/desktop_capture/linux/wayland/mouse_cursor_monitor_pipewire.cc
+@@ -40,7 +40,7 @@ void MouseCursorMonitorPipeWire::Capture() {
+   RTC_DCHECK_RUN_ON(&sequence_checker_);
+   RTC_DCHECK(callback_);
+ 
+-  absl::optional<DesktopVector> mouse_cursor_position =
++  std::optional<DesktopVector> mouse_cursor_position =
+       options_.screencast_stream()->CaptureCursorPosition();
+   // Invalid cursor or position
+   if (!mouse_cursor_position) {
+diff --git a/modules/desktop_capture/linux/wayland/screencast_stream_utils.cc b/modules/desktop_capture/linux/wayland/screencast_stream_utils.cc
+index 8177cfd211..b0bac69575 100644
+--- a/modules/desktop_capture/linux/wayland/screencast_stream_utils.cc
++++ b/modules/desktop_capture/linux/wayland/screencast_stream_utils.cc
+@@ -34,9 +34,9 @@ PipeWireVersion PipeWireVersion::Parse(const absl::string_view& version) {
+     return {};
+   }
+ 
+-  absl::optional<int> major = rtc::StringToNumber<int>(parsed_version.at(0));
+-  absl::optional<int> minor = rtc::StringToNumber<int>(parsed_version.at(1));
+-  absl::optional<int> micro = rtc::StringToNumber<int>(parsed_version.at(2));
++  std::optional<int> major = rtc::StringToNumber<int>(parsed_version.at(0));
++  std::optional<int> minor = rtc::StringToNumber<int>(parsed_version.at(1));
++  std::optional<int> micro = rtc::StringToNumber<int>(parsed_version.at(2));
+ 
+   // Return invalid version if we failed to parse it
+   if (!major || !minor || !micro) {
+diff --git a/modules/desktop_capture/linux/wayland/shared_screencast_stream.cc b/modules/desktop_capture/linux/wayland/shared_screencast_stream.cc
+index 047ad5a857..9aa50e19ee 100644
+--- a/modules/desktop_capture/linux/wayland/shared_screencast_stream.cc
++++ b/modules/desktop_capture/linux/wayland/shared_screencast_stream.cc
+@@ -1034,12 +1034,12 @@ std::unique_ptr<MouseCursor> SharedScreenCastStream::CaptureCursor() {
+   return private_->CaptureCursor();
+ }
+ 
+-absl::optional<DesktopVector> SharedScreenCastStream::CaptureCursorPosition() {
++std::optional<DesktopVector> SharedScreenCastStream::CaptureCursorPosition() {
+   DesktopVector position = private_->CaptureCursorPosition();
+ 
+   // Consider only (x >= 0 and y >= 0) a valid position
+   if (position.x() < 0 || position.y() < 0) {
+-    return absl::nullopt;
++    return std::nullopt;
+   }
+ 
+   return position;
+diff --git a/modules/desktop_capture/linux/wayland/shared_screencast_stream.h b/modules/desktop_capture/linux/wayland/shared_screencast_stream.h
+index 1b00e27476..1784ad358c 100644
+--- a/modules/desktop_capture/linux/wayland/shared_screencast_stream.h
++++ b/modules/desktop_capture/linux/wayland/shared_screencast_stream.h
+@@ -12,8 +12,8 @@
+ #define MODULES_DESKTOP_CAPTURE_LINUX_WAYLAND_SHARED_SCREENCAST_STREAM_H_
+ 
+ #include <memory>
++#include <optional>
+ 
+-#include "absl/types/optional.h"
+ #include "api/ref_counted_base.h"
+ #include "api/scoped_refptr.h"
+ #include "modules/desktop_capture/desktop_capturer.h"
+@@ -81,7 +81,7 @@ class RTC_EXPORT SharedScreenCastStream
+ 
+   // Returns the most recent mouse cursor position. Will not return a value in
+   // case we didn't manage to get it from PipeWire buffer.
+-  absl::optional<DesktopVector> CaptureCursorPosition();
++  std::optional<DesktopVector> CaptureCursorPosition();
+ 
+   ~SharedScreenCastStream();
+ 
+diff --git a/modules/desktop_capture/win/wgc_capture_source.h b/modules/desktop_capture/win/wgc_capture_source.h
+index 57b105c2f8..f155cdde1c 100644
+--- a/modules/desktop_capture/win/wgc_capture_source.h
++++ b/modules/desktop_capture/win/wgc_capture_source.h
+@@ -16,8 +16,8 @@
+ #include <wrl/client.h>
+ 
+ #include <memory>
++#include <optional>
+ 
+-#include "absl/types/optional.h"
+ #include "modules/desktop_capture/desktop_capturer.h"
+ #include "modules/desktop_capture/desktop_geometry.h"
+ 
+@@ -138,7 +138,7 @@ class WgcScreenSource final : public WgcCaptureSource {
+   // device index as it's SourceId. However, WGC requires we use an HMONITOR to
+   // describe which screen to capture. So, we internally convert the supplied
+   // device index into an HMONITOR when `IsCapturable()` is called.
+-  absl::optional<HMONITOR> hmonitor_;
++  std::optional<HMONITOR> hmonitor_;
+ };
+ 
+ }  // namespace webrtc
+-- 
+2.42.0
+

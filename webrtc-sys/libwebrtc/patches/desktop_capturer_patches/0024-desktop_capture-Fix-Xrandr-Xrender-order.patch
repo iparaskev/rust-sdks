@@ -1,0 +1,39 @@
+From bea44590f674268cf841f37f39c9579be7e399b2 Mon Sep 17 00:00:00 2001
+From: Florent Castelli <fcastelli@nvidia.com>
+Date: Mon, 27 Jan 2025 16:26:03 +0100
+Subject: [PATCH 24/28] desktop_capture: Fix Xrandr / Xrender order
+
+Since Xrandr depends on Xrender, it needs to be explicitely listed before, otherwise linkers may not find the Xrender symbols.
+
+Bug: None
+Change-Id: Ifb1e82f63e1fc1645979c14b65e3beab06637cb8
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/375428
+Reviewed-by: Harald Alvestrand <hta@webrtc.org>
+Auto-Submit: Florent Castelli SE <fcastelli@nvidia.com>
+Reviewed-by: Mirko Bonadei <mbonadei@webrtc.org>
+Commit-Queue: Harald Alvestrand <hta@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#43808}
+---
+ modules/desktop_capture/BUILD.gn | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/modules/desktop_capture/BUILD.gn b/modules/desktop_capture/BUILD.gn
+index 4ea31b9db7..634ef53920 100644
+--- a/modules/desktop_capture/BUILD.gn
++++ b/modules/desktop_capture/BUILD.gn
+@@ -408,8 +408,11 @@ rtc_library("desktop_capture") {
+       "Xdamage",
+       "Xext",
+       "Xfixes",
+-      "Xrender",
++
++      # Xrandr depends on Xrender and needs to be listed before its dependency.
+       "Xrandr",
++
++      "Xrender",
+       "Xtst",
+     ]
+   }
+-- 
+2.42.0
+

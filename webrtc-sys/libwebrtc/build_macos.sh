@@ -71,6 +71,12 @@ git apply "$COMMAND_DIR/patches/add_licenses.patch" -v --ignore-space-change --i
 git apply "$COMMAND_DIR/patches/ssl_verify_callback_with_native_handle.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/add_deps.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 
+# Apply patches that enable desktop capturer capturing
+for patch_file in $(ls "$COMMAND_DIR/patches/desktop_capturer_patches"/*.patch | sort -V); do
+    # Apply the patch file
+    git am "$patch_file"
+done
+
 cd third_party
 git apply "$COMMAND_DIR/patches/abseil_use_optional.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 cd ..

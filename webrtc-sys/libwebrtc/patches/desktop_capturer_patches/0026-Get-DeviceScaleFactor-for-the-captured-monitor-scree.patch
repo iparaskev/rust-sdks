@@ -1,0 +1,400 @@
+From e20fbb00d0e0219b710da24664e81a10b12c703a Mon Sep 17 00:00:00 2001
+From: Palak Agarwal <agpalak@google.com>
+Date: Wed, 29 Jan 2025 11:55:20 +0000
+Subject: [PATCH 26/28] Get DeviceScaleFactor for the captured monitor/screen
+
+Accesses DeviceScaleFactor using the windows API
+GetScaleFactorForMonitor and adds it to the DesktopFrame. In a follow-up
+CL, this value is propagated to
+DesktopCaptureDevice::Core::OnCaptureResult where it is added to the
+frame metadata.
+
+In a follow-up CL, add RegisterScaleChangeEvent to get notified whenever
+the device scale factor changes.
+
+Design doc: go/expose-captured-surface-resolution
+
+Bug: chromium:383946052
+Change-Id: I363af33c569419d95ddf31a0cc2f9cecf6fb0c7b
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/374344
+Reviewed-by: Henrik Andreassson <henrika@webrtc.org>
+Reviewed-by: Mark Foltz <mfoltz@chromium.org>
+Commit-Queue: Palak Agarwal <agpalak@google.com>
+Reviewed-by: Ilya Nikolaevskiy <ilnik@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#43827}
+---
+ modules/desktop_capture/desktop_frame.cc      |  2 ++
+ modules/desktop_capture/desktop_frame.h       | 10 ++++++++++
+ .../desktop_capture/desktop_frame_unittest.cc | 12 ++++++++++++
+ .../win/dxgi_adapter_duplicator.cc            |  7 +++++++
+ .../win/dxgi_adapter_duplicator.h             |  5 +++++
+ .../win/dxgi_duplicator_controller.cc         | 16 +++++++++++++++-
+ .../win/dxgi_duplicator_controller.h          |  7 +++++++
+ modules/desktop_capture/win/dxgi_frame.cc     |  6 ++++--
+ modules/desktop_capture/win/dxgi_frame.h      |  7 +++++--
+ .../win/dxgi_output_duplicator.cc             | 10 ++++++++++
+ .../win/dxgi_output_duplicator.h              |  6 ++++++
+ .../win/wgc_capture_session.cc                | 19 +++++++++++++++++--
+ .../desktop_capture/win/wgc_capture_session.h |  9 +++++++++
+ .../desktop_capture/win/wgc_capturer_win.cc   |  4 ++--
+ 14 files changed, 111 insertions(+), 9 deletions(-)
+
+diff --git a/modules/desktop_capture/desktop_frame.cc b/modules/desktop_capture/desktop_frame.cc
+index be61196c7d..ace60e2749 100644
+--- a/modules/desktop_capture/desktop_frame.cc
++++ b/modules/desktop_capture/desktop_frame.cc
+@@ -134,6 +134,7 @@ void DesktopFrame::CopyFrameInfoFrom(const DesktopFrame& other) {
+   set_top_left(other.top_left());
+   set_icc_profile(other.icc_profile());
+   set_may_contain_cursor(other.may_contain_cursor());
++  set_device_scale_factor(other.device_scale_factor());
+ }
+ 
+ void DesktopFrame::MoveFrameInfoFrom(DesktopFrame* other) {
+@@ -144,6 +145,7 @@ void DesktopFrame::MoveFrameInfoFrom(DesktopFrame* other) {
+   set_top_left(other->top_left());
+   set_icc_profile(other->icc_profile());
+   set_may_contain_cursor(other->may_contain_cursor());
++  set_device_scale_factor(other->device_scale_factor());
+ }
+ 
+ bool DesktopFrame::FrameDataIsBlack() const {
+diff --git a/modules/desktop_capture/desktop_frame.h b/modules/desktop_capture/desktop_frame.h
+index 35ac8e2475..03cc89c370 100644
+--- a/modules/desktop_capture/desktop_frame.h
++++ b/modules/desktop_capture/desktop_frame.h
+@@ -74,6 +74,12 @@ class RTC_EXPORT DesktopFrame {
+   const DesktopVector& dpi() const { return dpi_; }
+   void set_dpi(const DesktopVector& dpi) { dpi_ = dpi; }
+ 
++  std::optional<int32_t> device_scale_factor() const {
++    return device_scale_factor_;
++  }
++  void set_device_scale_factor(std::optional<int32_t> device_scale_factor) {
++    device_scale_factor_ = device_scale_factor;
++  }
+   // Indicates if this frame may have the mouse cursor in it. Capturers that
+   // support cursor capture may set this to true. If the cursor was
+   // outside of the captured area, this may be true even though the cursor is
+@@ -172,6 +178,10 @@ class RTC_EXPORT DesktopFrame {
+   int64_t capture_time_ms_;
+   uint32_t capturer_id_;
+   std::vector<uint8_t> icc_profile_;
++  // Currently only used on Windows. It stores the device scale factor of the
++  // captured surface and has distinct values possible in the range of
++  // [100,500].
++  std::optional<int32_t> device_scale_factor_;
+ };
+ 
+ // A DesktopFrame that stores data in the heap.
+diff --git a/modules/desktop_capture/desktop_frame_unittest.cc b/modules/desktop_capture/desktop_frame_unittest.cc
+index 7237695c88..8aab816f76 100644
+--- a/modules/desktop_capture/desktop_frame_unittest.cc
++++ b/modules/desktop_capture/desktop_frame_unittest.cc
+@@ -97,6 +97,18 @@ TEST(DesktopFrameTest, EmptyFrameIsNotBlack) {
+   EXPECT_FALSE(frame->FrameDataIsBlack());
+ }
+ 
++TEST(DesktopFrameTest, FrameHasDefaultDeviceScaleFactor) {
++  auto frame = std::make_unique<BasicDesktopFrame>(DesktopSize());
++  EXPECT_EQ(frame->device_scale_factor(), std::nullopt);
++}
++
++TEST(DesktopFrameTest, FrameSetsDeviceScaleFactorCorrectly) {
++  auto frame = std::make_unique<BasicDesktopFrame>(DesktopSize());
++  EXPECT_EQ(frame->device_scale_factor(), std::nullopt);
++  frame->set_device_scale_factor(/*device_scale_factor=*/150);
++  EXPECT_EQ(frame->device_scale_factor(), 150);
++}
++
+ TEST(DesktopFrameTest, FrameDataSwitchesBetweenNonBlackAndBlack) {
+   auto frame = CreateTestFrame(DesktopRect::MakeXYWH(0, 0, 10, 10), 0xff);
+   EXPECT_FALSE(frame->FrameDataIsBlack());
+diff --git a/modules/desktop_capture/win/dxgi_adapter_duplicator.cc b/modules/desktop_capture/win/dxgi_adapter_duplicator.cc
+index e06ed7a898..6ad5f5c5d0 100644
+--- a/modules/desktop_capture/win/dxgi_adapter_duplicator.cc
++++ b/modules/desktop_capture/win/dxgi_adapter_duplicator.cc
+@@ -148,6 +148,13 @@ bool DxgiAdapterDuplicator::DuplicateMonitor(Context* context,
+                                             DesktopVector(), target);
+ }
+ 
++std::optional<int32_t> DxgiAdapterDuplicator::GetDeviceScaleFactor(
++    int screen_id) const {
++  RTC_DCHECK_GE(screen_id, 0);
++  RTC_DCHECK_LT(screen_id, duplicators_.size());
++  return duplicators_[screen_id].device_scale_factor();
++}
++
+ DesktopRect DxgiAdapterDuplicator::ScreenRect(int id) const {
+   RTC_DCHECK_GE(id, 0);
+   RTC_DCHECK_LT(id, duplicators_.size());
+diff --git a/modules/desktop_capture/win/dxgi_adapter_duplicator.h b/modules/desktop_capture/win/dxgi_adapter_duplicator.h
+index 5948be82ee..b0539c4053 100644
+--- a/modules/desktop_capture/win/dxgi_adapter_duplicator.h
++++ b/modules/desktop_capture/win/dxgi_adapter_duplicator.h
+@@ -55,6 +55,11 @@ class DxgiAdapterDuplicator {
+   // Returns desktop rect covered by this DxgiAdapterDuplicator.
+   DesktopRect desktop_rect() const { return desktop_rect_; }
+ 
++  // Returns the device scale factor of screen identified by `screen_id`, which
++  // is owned by this DxgiAdapterDuplicator. `screen_id` should be between [0,
++  // screen_count()).
++  std::optional<int32_t> GetDeviceScaleFactor(int screen_id) const;
++
+   // Returns the size of one screen owned by this DxgiAdapterDuplicator. `id`
+   // should be between [0, screen_count()).
+   DesktopRect ScreenRect(int id) const;
+diff --git a/modules/desktop_capture/win/dxgi_duplicator_controller.cc b/modules/desktop_capture/win/dxgi_duplicator_controller.cc
+index 3663066ea7..94ad12e910 100644
+--- a/modules/desktop_capture/win/dxgi_duplicator_controller.cc
++++ b/modules/desktop_capture/win/dxgi_duplicator_controller.cc
+@@ -189,7 +189,8 @@ DxgiDuplicatorController::Result DxgiDuplicatorController::DoDuplicate(
+     return Result::INITIALIZATION_FAILED;
+   }
+ 
+-  if (!frame->Prepare(SelectedDesktopSize(monitor_id), monitor_id)) {
++  if (!frame->Prepare(SelectedDesktopSize(monitor_id), monitor_id,
++                      GetDeviceScaleFactor(monitor_id))) {
+     return Result::FRAME_PREPARE_FAILED;
+   }
+ 
+@@ -393,6 +394,19 @@ DesktopSize DxgiDuplicatorController::desktop_size() const {
+   return desktop_rect_.size();
+ }
+ 
++std::optional<int32_t> DxgiDuplicatorController::GetDeviceScaleFactor(
++    int monitor_id) const {
++  RTC_CHECK_GE(monitor_id, 0);
++  for (const auto& duplicator : duplicators_) {
++    if (monitor_id >= duplicator.screen_count()) {
++      monitor_id -= duplicator.screen_count();
++    } else {
++      return duplicator.GetDeviceScaleFactor(monitor_id);
++    }
++  }
++  return std::nullopt;
++}
++
+ DesktopRect DxgiDuplicatorController::ScreenRect(int id) const {
+   RTC_DCHECK(id >= 0);
+   for (size_t i = 0; i < duplicators_.size(); i++) {
+diff --git a/modules/desktop_capture/win/dxgi_duplicator_controller.h b/modules/desktop_capture/win/dxgi_duplicator_controller.h
+index 5a92560f26..2df7b869f3 100644
+--- a/modules/desktop_capture/win/dxgi_duplicator_controller.h
++++ b/modules/desktop_capture/win/dxgi_duplicator_controller.h
+@@ -206,6 +206,13 @@ class RTC_EXPORT DxgiDuplicatorController {
+   // Returns a DesktopSize to cover entire `desktop_rect_`.
+   DesktopSize desktop_size() const RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
++  // Returns the device scale factor of one screen. `monitor_id` should be >= 0.
++  // If system does not support DXGI based capturer, or `monitor_id` is greater
++  // than the total screen count of all the Duplicators, this function returns
++  // std::nullopt.
++  std::optional<int32_t> GetDeviceScaleFactor(int monitor_id) const
++      RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++
+   // Returns the size of one screen. `id` should be >= 0. If system does not
+   // support DXGI based capturer, or `id` is greater than the total screen count
+   // of all the Duplicators, this function returns an empty DesktopRect.
+diff --git a/modules/desktop_capture/win/dxgi_frame.cc b/modules/desktop_capture/win/dxgi_frame.cc
+index 13d5b4b62e..223e27d6dd 100644
+--- a/modules/desktop_capture/win/dxgi_frame.cc
++++ b/modules/desktop_capture/win/dxgi_frame.cc
+@@ -25,7 +25,9 @@ DxgiFrame::DxgiFrame(SharedMemoryFactory* factory) : factory_(factory) {}
+ 
+ DxgiFrame::~DxgiFrame() = default;
+ 
+-bool DxgiFrame::Prepare(DesktopSize size, DesktopCapturer::SourceId source_id) {
++bool DxgiFrame::Prepare(DesktopSize size,
++                        DesktopCapturer::SourceId source_id,
++                        std::optional<int32_t> device_scale_factor) {
+   if (source_id != source_id_) {
+     // Once the source has been changed, the entire source should be copied.
+     source_id_ = source_id;
+@@ -57,7 +59,7 @@ bool DxgiFrame::Prepare(DesktopSize size, DesktopCapturer::SourceId source_id) {
+     } else {
+       frame.reset(new BasicDesktopFrame(size));
+     }
+-
++    frame->set_device_scale_factor(device_scale_factor);
+     frame_ = SharedDesktopFrame::Wrap(std::move(frame));
+   }
+ 
+diff --git a/modules/desktop_capture/win/dxgi_frame.h b/modules/desktop_capture/win/dxgi_frame.h
+index 6a9ce868a7..3cb0d84861 100644
+--- a/modules/desktop_capture/win/dxgi_frame.h
++++ b/modules/desktop_capture/win/dxgi_frame.h
+@@ -45,8 +45,11 @@ class DxgiFrame final {
+   // as well as Context class.
+   friend class DxgiDuplicatorController;
+ 
+-  // Prepares current instance with desktop size and source id.
+-  bool Prepare(DesktopSize size, DesktopCapturer::SourceId source_id);
++  // Prepares current instance with desktop size, source id and device scale
++  // factor.
++  bool Prepare(DesktopSize size,
++               DesktopCapturer::SourceId source_id,
++               std::optional<int32_t> device_scale_factor);
+ 
+   // Should not be called if Prepare() is not executed or returns false.
+   Context* context();
+diff --git a/modules/desktop_capture/win/dxgi_output_duplicator.cc b/modules/desktop_capture/win/dxgi_output_duplicator.cc
+index ac028ce38b..a9ed785c16 100644
+--- a/modules/desktop_capture/win/dxgi_output_duplicator.cc
++++ b/modules/desktop_capture/win/dxgi_output_duplicator.cc
+@@ -73,6 +73,9 @@ DxgiOutputDuplicator::DxgiOutputDuplicator(const D3dDevice& device,
+   RTC_DCHECK(!desktop_rect_.is_empty());
+   RTC_DCHECK_GT(desktop_rect_.width(), 0);
+   RTC_DCHECK_GT(desktop_rect_.height(), 0);
++  HRESULT hr = GetScaleFactorForMonitor(desc.Monitor, &device_scale_factor_);
++  RTC_LOG_IF(LS_ERROR, FAILED(hr))
++      << "Failed to get scale factor for monitor: " << hr;
+ }
+ 
+ DxgiOutputDuplicator::DxgiOutputDuplicator(DxgiOutputDuplicator&& other) =
+@@ -418,6 +421,13 @@ int64_t DxgiOutputDuplicator::num_frames_captured() const {
+   return num_frames_captured_;
+ }
+ 
++std::optional<DEVICE_SCALE_FACTOR> DxgiOutputDuplicator::device_scale_factor()
++    const {
++  return (device_scale_factor_ != DEVICE_SCALE_FACTOR_INVALID)
++             ? std::make_optional(device_scale_factor_)
++             : std::nullopt;
++}
++
+ void DxgiOutputDuplicator::TranslateRect(const DesktopVector& position) {
+   desktop_rect_.Translate(position);
+   RTC_DCHECK_GE(desktop_rect_.left(), 0);
+diff --git a/modules/desktop_capture/win/dxgi_output_duplicator.h b/modules/desktop_capture/win/dxgi_output_duplicator.h
+index a4ce035d8b..6bad18d94a 100644
+--- a/modules/desktop_capture/win/dxgi_output_duplicator.h
++++ b/modules/desktop_capture/win/dxgi_output_duplicator.h
+@@ -14,6 +14,7 @@
+ #include <comdef.h>
+ #include <dxgi.h>
+ #include <dxgi1_2.h>
++#include <shellscalingapi.h>
+ #include <wrl/client.h>
+ 
+ #include <memory>
+@@ -83,6 +84,10 @@ class DxgiOutputDuplicator {
+   // How many frames have been captured by this DxigOutputDuplicator.
+   int64_t num_frames_captured() const;
+ 
++  // Device scale factor of the monitor associated with this
++  // DxigOutputDuplicator.
++  std::optional<DEVICE_SCALE_FACTOR> device_scale_factor() const;
++
+   // Moves `desktop_rect_`. See DxgiDuplicatorController::TranslateRect().
+   void TranslateRect(const DesktopVector& position);
+ 
+@@ -133,6 +138,7 @@ class DxgiOutputDuplicator {
+   std::unique_ptr<DxgiTexture> texture_;
+   Rotation rotation_;
+   DesktopSize unrotated_size_;
++  DEVICE_SCALE_FACTOR device_scale_factor_ = DEVICE_SCALE_FACTOR_INVALID;
+ 
+   // After each AcquireNextFrame() function call, updated_region_(s) of all
+   // active Context(s) need to be updated. Since they have missed the
+diff --git a/modules/desktop_capture/win/wgc_capture_session.cc b/modules/desktop_capture/win/wgc_capture_session.cc
+index 1c86f8ed1b..0d4b33752a 100644
+--- a/modules/desktop_capture/win/wgc_capture_session.cc
++++ b/modules/desktop_capture/win/wgc_capture_session.cc
+@@ -22,6 +22,7 @@
+ #include <utility>
+ #include <vector>
+ 
++#include "modules/desktop_capture/win/screen_capture_utils.h"
+ #include "modules/desktop_capture/win/wgc_desktop_frame.h"
+ #include "rtc_base/checks.h"
+ #include "rtc_base/logging.h"
+@@ -99,12 +100,23 @@ bool SizeHasChanged(ABI::Windows::Graphics::SizeInt32 size_new,
+ 
+ }  // namespace
+ 
+-WgcCaptureSession::WgcCaptureSession(ComPtr<ID3D11Device> d3d11_device,
++WgcCaptureSession::WgcCaptureSession(intptr_t source_id,
++                                     ComPtr<ID3D11Device> d3d11_device,
+                                      ComPtr<WGC::IGraphicsCaptureItem> item,
+                                      ABI::Windows::Graphics::SizeInt32 size)
+     : d3d11_device_(std::move(d3d11_device)),
+       item_(std::move(item)),
+-      size_(size) {}
++      size_(size) {
++  RTC_CHECK(source_id);
++  HMONITOR monitor = 0;
++  if (!GetHmonitorFromDeviceIndex(source_id, &monitor)) {
++    monitor = MonitorFromWindow(reinterpret_cast<HWND>(source_id),
++                                /*dwFlags=*/MONITOR_DEFAULTTONEAREST);
++  }
++  HRESULT hr = GetScaleFactorForMonitor(monitor, &device_scale_factor_);
++  RTC_LOG_IF(LS_ERROR, FAILED(hr))
++      << "Failed to get scale factor for monitor: " << hr;
++}
+ 
+ WgcCaptureSession::~WgcCaptureSession() {
+   RemoveEventHandler();
+@@ -456,6 +468,9 @@ HRESULT WgcCaptureSession::ProcessFrame() {
+   }
+ 
+   DesktopFrame* current_frame = queue_.current_frame();
++  if (device_scale_factor_ != DEVICE_SCALE_FACTOR_INVALID) {
++    current_frame->set_device_scale_factor(device_scale_factor_);
++  }
+   DesktopFrame* previous_frame = queue_.previous_frame();
+ 
+   // Will be set to true while copying the frame data to the `current_frame` if
+diff --git a/modules/desktop_capture/win/wgc_capture_session.h b/modules/desktop_capture/win/wgc_capture_session.h
+index d2901d9199..a7af8f4062 100644
+--- a/modules/desktop_capture/win/wgc_capture_session.h
++++ b/modules/desktop_capture/win/wgc_capture_session.h
+@@ -12,6 +12,7 @@
+ #define MODULES_DESKTOP_CAPTURE_WIN_WGC_CAPTURE_SESSION_H_
+ 
+ #include <d3d11.h>
++#include <shellscalingapi.h>
+ #include <windows.graphics.capture.h>
+ #include <windows.graphics.h>
+ #include <wrl/client.h>
+@@ -29,7 +30,9 @@ namespace webrtc {
+ 
+ class WgcCaptureSession final {
+  public:
++  // `source_id` is used to retreive the HMONITOR for the captured window.
+   WgcCaptureSession(
++      intptr_t source_id,
+       Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device,
+       Microsoft::WRL::ComPtr<
+           ABI::Windows::Graphics::Capture::IGraphicsCaptureItem> item,
+@@ -146,6 +149,12 @@ class WgcCaptureSession final {
+   // false.
+   DesktopRegion damage_region_;
+ 
++  // Captures the device scale factor of the monitor where the frame is captured
++  // from. This value is the same as the scale from windows settings. Valid
++  // values are some distinct numbers in the range of [100,500], for example,
++  // 100, 150, 250, etc.
++  DEVICE_SCALE_FACTOR device_scale_factor_ = DEVICE_SCALE_FACTOR_INVALID;
++
+   SequenceChecker sequence_checker_;
+ };
+ 
+diff --git a/modules/desktop_capture/win/wgc_capturer_win.cc b/modules/desktop_capture/win/wgc_capturer_win.cc
+index 54a0917842..fff2a9ee23 100644
+--- a/modules/desktop_capture/win/wgc_capturer_win.cc
++++ b/modules/desktop_capture/win/wgc_capturer_win.cc
+@@ -342,8 +342,8 @@ void WgcCapturerWin::CaptureFrame() {
+         iter_success_pair = ongoing_captures_.emplace(
+             std::piecewise_construct,
+             std::forward_as_tuple(capture_source_->GetSourceId()),
+-            std::forward_as_tuple(d3d11_device_, item,
+-                                  capture_source_->GetSize()));
++            std::forward_as_tuple(capture_source_->GetSourceId(), d3d11_device_,
++                                  item, capture_source_->GetSize()));
+     RTC_DCHECK(iter_success_pair.second);
+     capture_session = &iter_success_pair.first->second;
+   } else {
+-- 
+2.42.0
+

@@ -1,0 +1,30 @@
+From eb3da2b1ec36319bdb8aae79670d3f2cc1c73978 Mon Sep 17 00:00:00 2001
+From: Artem Titov <titovartem@webrtc.org>
+Date: Wed, 26 Jun 2024 13:23:44 +0200
+Subject: [PATCH 12/28] Extract video writing into separate target
+
+Bug: None
+Change-Id: I3af192606eb623e21a4d648fb69bb62c14ab8b0d
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/355560
+Reviewed-by: Mirko Bonadei <mbonadei@webrtc.org>
+Commit-Queue: Artem Titov <titovartem@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#42541}
+---
+ modules/desktop_capture/BUILD.gn | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/modules/desktop_capture/BUILD.gn b/modules/desktop_capture/BUILD.gn
+index 90930adc0d..ddbf3c3d58 100644
+--- a/modules/desktop_capture/BUILD.gn
++++ b/modules/desktop_capture/BUILD.gn
+@@ -67,7 +67,6 @@ if (rtc_include_tests) {
+         "../../rtc_base/third_party/base64",
+         "../../system_wrappers",
+         "../../test:test_support",
+-        "../../test:video_test_support",
+       ]
+       sources += [
+         "screen_capturer_integration_test.cc",
+-- 
+2.42.0
+

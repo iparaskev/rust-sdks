@@ -1,0 +1,28 @@
+From b90bd5d6123e315187e4c64b4051beb566a2a05c Mon Sep 17 00:00:00 2001
+From: Iason Paraskevopoulos <iaswnparaskev@gmail.com>
+Date: Sat, 7 Jun 2025 10:44:27 +0100
+Subject: [PATCH] Fix compilation issue
+
+---
+ modules/desktop_capture/mac/screen_capturer_mac.mm | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/modules/desktop_capture/mac/screen_capturer_mac.mm b/modules/desktop_capture/mac/screen_capturer_mac.mm
+index c416278..882e4eb 100644
+--- a/modules/desktop_capture/mac/screen_capturer_mac.mm
++++ b/modules/desktop_capture/mac/screen_capturer_mac.mm
+@@ -182,11 +182,6 @@ void ScreenCapturerMac::Start(Callback* callback) {
+   RTC_DCHECK(thread_checker_.IsCurrent());
+   RTC_DCHECK(!callback_);
+   RTC_DCHECK(callback);
+-  TRACE_EVENT_INSTANT1("webrtc",
+-                       "ScreenCapturermac::Start",
+-                       TRACE_EVENT_SCOPE_GLOBAL,
+-                       "target display id ",
+-                       current_display_);
+ 
+   callback_ = callback;
+   // Start and operate CGDisplayStream handler all from capture thread.
+-- 
+2.42.0
+

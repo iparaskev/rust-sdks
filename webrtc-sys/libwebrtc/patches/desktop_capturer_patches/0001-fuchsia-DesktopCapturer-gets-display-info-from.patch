@@ -1,0 +1,88 @@
+From 74e9c4302c4644699f139f93951a34bb2f709d8a Mon Sep 17 00:00:00 2001
+From: Caroline Liu <carolineliu@google.com>
+Date: Mon, 9 Oct 2023 17:19:06 +0000
+Subject: [PATCH 01/28] [fuchsia] DesktopCapturer gets display info from
+ fuchsia.ui.display.singleton
+
+We previously used fuchsia.ui.scenic.Scenic/GetDisplayInfo to get
+fuchsia.ui.gfx.DisplayInfo. This has been migrated to
+fuchsia.ui.display.singleton.Info/GetMetrics and
+fuchsia.ui.display.singleton.Metrics.
+
+Bug: fuchsia:64206
+Test: applied changes manually to local chromium repo's third_party/webrtc directory and compiled
+Change-Id: If3c7fbd641ebd3b3333e7e5f1126f8f3ae3b97e7
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/322780
+Commit-Queue: Caroline Liu <carolineliu@google.com>
+Reviewed-by: Emircan Uysaler <emircan@google.com>
+Reviewed-by: Alexander Cooper <alcooper@chromium.org>
+Cr-Commit-Position: refs/heads/main@{#42104}
+---
+ modules/desktop_capture/BUILD.gn               |  3 +--
+ .../desktop_capture/screen_capturer_fuchsia.cc | 18 ++++++++++--------
+ 2 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/modules/desktop_capture/BUILD.gn b/modules/desktop_capture/BUILD.gn
+index fcf1836930..d0c636a2bc 100644
+--- a/modules/desktop_capture/BUILD.gn
++++ b/modules/desktop_capture/BUILD.gn
+@@ -453,8 +453,7 @@ rtc_library("desktop_capture") {
+       "../../rtc_base:divide_round",
+       "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem",
+       "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.composition",
+-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.scenic",
+-      "//third_party/fuchsia-sdk/sdk/pkg/scenic_cpp",
++      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.display.singleton",
+       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
+     ]
+   }
+diff --git a/modules/desktop_capture/screen_capturer_fuchsia.cc b/modules/desktop_capture/screen_capturer_fuchsia.cc
+index b67632d1f9..f2198bf575 100644
+--- a/modules/desktop_capture/screen_capturer_fuchsia.cc
++++ b/modules/desktop_capture/screen_capturer_fuchsia.cc
+@@ -12,7 +12,7 @@
+ 
+ #include <fuchsia/sysmem/cpp/fidl.h>
+ #include <fuchsia/ui/composition/cpp/fidl.h>
+-#include <fuchsia/ui/scenic/cpp/fidl.h>
++#include <fuchsia/ui/display/singleton/cpp/fidl.h>
+ #include <lib/sys/cpp/component_context.h>
+ 
+ #include <algorithm>
+@@ -200,24 +200,26 @@ ScreenCapturerFuchsia::GetBufferConstraints() {
+ }
+ 
+ void ScreenCapturerFuchsia::SetupBuffers() {
+-  fuchsia::ui::scenic::ScenicSyncPtr scenic;
+-  zx_status_t status = component_context_->svc()->Connect(scenic.NewRequest());
++  fuchsia::ui::display::singleton::InfoSyncPtr display_info;
++  zx_status_t status =
++      component_context_->svc()->Connect(display_info.NewRequest());
+   if (status != ZX_OK) {
+     fatal_error_ = true;
+-    RTC_LOG(LS_ERROR) << "Failed to connect to Scenic: " << status;
++    RTC_LOG(LS_ERROR)
++        << "Failed to connect to fuchsia.ui.display.singleton.Info: " << status;
+     return;
+   }
+ 
+-  fuchsia::ui::gfx::DisplayInfo display_info;
+-  status = scenic->GetDisplayInfo(&display_info);
++  fuchsia::ui::display::singleton::Metrics metrics;
++  status = display_info->GetMetrics(&metrics);
+   if (status != ZX_OK) {
+     fatal_error_ = true;
+     RTC_LOG(LS_ERROR) << "Failed to connect to get display dimensions: "
+                       << status;
+     return;
+   }
+-  width_ = display_info.width_in_px;
+-  height_ = display_info.height_in_px;
++  width_ = metrics.extent_in_px().width;
++  height_ = metrics.extent_in_px().height;
+ 
+   status = component_context_->svc()->Connect(sysmem_allocator_.NewRequest());
+   if (status != ZX_OK) {
+-- 
+2.42.0
+

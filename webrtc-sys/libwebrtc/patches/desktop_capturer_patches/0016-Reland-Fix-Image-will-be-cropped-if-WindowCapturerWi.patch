@@ -1,0 +1,50 @@
+From 7fe62f25d14aef7dc17c4ba7742f8065c22fc968 Mon Sep 17 00:00:00 2001
+From: memetao <meemetao@gmail.com>
+Date: Sun, 10 Dec 2023 13:42:20 +0800
+Subject: [PATCH 16/28] Reland "Fix 'Image will be cropped if
+ WindowCapturerWinGdi used'"
+
+This is a reland of commit 844225a76a98aa3be5aca09c19ab72a5e7b6c38a
+
+Original change's description:
+> Fix 'Image will be cropped if WindowCapturerWinGdi used'
+>
+> Bug: webrtc:15719
+> Change-Id: I7daf8ee5b90fbe9f1246f1d99211ffa0d8a19f73
+> Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/330780
+> Reviewed-by: Alexander Cooper <alcooper@chromium.org>
+> Commit-Queue: Alexander Cooper <alcooper@chromium.org>
+> Cr-Commit-Position: refs/heads/main@{#41503}
+
+Bug: webrtc:15719
+Change-Id: Idbb2f4dcc8811d3b2b763a49adc7a57535b3d1b2
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/334380
+Reviewed-by: Tomas Gunnarsson <tommi@webrtc.org>
+Reviewed-by: Alexander Cooper <alcooper@chromium.org>
+Commit-Queue: Tomas Gunnarsson <tommi@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#42666}
+---
+ modules/desktop_capture/win/window_capture_utils.cc | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/modules/desktop_capture/win/window_capture_utils.cc b/modules/desktop_capture/win/window_capture_utils.cc
+index ccfef49bc5..261c4002ae 100644
+--- a/modules/desktop_capture/win/window_capture_utils.cc
++++ b/modules/desktop_capture/win/window_capture_utils.cc
+@@ -183,6 +183,13 @@ bool GetCroppedWindowRect(HWND window,
+       is_maximized) {
+     // Only apply this cropping to windows with a resize border (otherwise,
+     // it'd clip the edges of captured pop-up windows without this border).
++    RECT rect;
++    DwmGetWindowAttribute(window, DWMWA_EXTENDED_FRAME_BOUNDS, &rect,
++                          sizeof(RECT));
++    // it's means that the window edge is not transparent
++    if (original_rect && rect.left == original_rect->left()) {
++      return true;
++    }
+     LONG style = GetWindowLong(window, GWL_STYLE);
+     if (style & WS_THICKFRAME || style & DS_MODALFRAME) {
+       int width = GetSystemMetrics(SM_CXSIZEFRAME);
+-- 
+2.42.0
+

@@ -1,0 +1,64 @@
+From f076fd91a11f877310f9016dc03b72662855cb17 Mon Sep 17 00:00:00 2001
+From: Avi Drissman <avi@chromium.org>
+Date: Fri, 31 May 2024 14:32:20 -0400
+Subject: [PATCH 07/28] Assume a modern macOS environment
+
+Mac OS X 10.5 was shipped in 2006, and Mac OS X 10.7 was shipped in
+2010. Assume that WebRTC is not running on releases older than
+those.
+
+Bug: none
+Change-Id: Ia7323c2ae7f186602aa972f390ea682bd2d1ff47
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/353240
+Auto-Submit: Avi Drissman <avi@chromium.org>
+Reviewed-by: Henrik Andreassson <henrika@webrtc.org>
+Commit-Queue: Henrik Andreassson <henrika@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#42423}
+---
+ .../mac/desktop_configuration.mm              | 23 +++----------------
+ 1 file changed, 3 insertions(+), 20 deletions(-)
+
+diff --git a/modules/desktop_capture/mac/desktop_configuration.mm b/modules/desktop_capture/mac/desktop_configuration.mm
+index 93fb3f6226..eeb035f2b0 100644
+--- a/modules/desktop_capture/mac/desktop_configuration.mm
++++ b/modules/desktop_capture/mac/desktop_configuration.mm
+@@ -16,16 +16,6 @@
+ 
+ #include "rtc_base/checks.h"
+ 
+-#if !defined(MAC_OS_X_VERSION_10_7) || \
+-    MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_7
+-
+-@interface NSScreen (LionAPI)
+-- (CGFloat)backingScaleFactor;
+-- (NSRect)convertRectToBacking:(NSRect)aRect;
+-@end
+-
+-#endif  // MAC_OS_X_VERSION_10_7
+-
+ namespace webrtc {
+ 
+ namespace {
+@@ -60,16 +50,9 @@ MacDisplayConfiguration GetConfigurationForScreen(NSScreen* screen) {
+   NSRect ns_bounds = [screen frame];
+   display_config.bounds = NSRectToDesktopRect(ns_bounds);
+ 
+-  // If the host is running Mac OS X 10.7+ or later, query the scaling factor
+-  // between logical and physical (aka "backing") pixels, otherwise assume 1:1.
+-  if ([screen respondsToSelector:@selector(backingScaleFactor)] &&
+-      [screen respondsToSelector:@selector(convertRectToBacking:)]) {
+-    display_config.dip_to_pixel_scale = [screen backingScaleFactor];
+-    NSRect ns_pixel_bounds = [screen convertRectToBacking: ns_bounds];
+-    display_config.pixel_bounds = NSRectToDesktopRect(ns_pixel_bounds);
+-  } else {
+-    display_config.pixel_bounds = display_config.bounds;
+-  }
++  display_config.dip_to_pixel_scale = [screen backingScaleFactor];
++  NSRect ns_pixel_bounds = [screen convertRectToBacking:ns_bounds];
++  display_config.pixel_bounds = NSRectToDesktopRect(ns_pixel_bounds);
+ 
+   // Determine if the display is built-in or external.
+   display_config.is_builtin = CGDisplayIsBuiltin(display_config.id);
+-- 
+2.42.0
+

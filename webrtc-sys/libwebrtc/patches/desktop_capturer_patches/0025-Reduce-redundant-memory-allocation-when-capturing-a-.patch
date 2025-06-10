@@ -1,0 +1,195 @@
+From feabcdb76be3b06c5b2c336f8eba6b6dbb8ab392 Mon Sep 17 00:00:00 2001
+From: fizzfang <fangkb555@gmail.com>
+Date: Fri, 24 Jan 2025 16:47:11 +0800
+Subject: [PATCH 25/28] Reduce redundant memory allocation when capturing a
+ single monitor.
+
+When capturing only one display, it is unnecessary to use
+DoDuplicateAll, which allocates bitmap image memory for a rectangle
+encompassing all screens and captures all displays. In this case, I
+switch to DoDuplicateOne.
+
+I have added an int parameter to GetNumFrameCaptured and
+EnsureFrameCaptured to distinguish which display's skip behavior is
+currently being executed.
+
+After the modification, when capturing a single monitor in a
+multi-monitor environment, only the bitmap image memory of the size of
+the captured monitor will be allocated, rather than for all monitors.
+
+Bug: webrtc:391914255
+Change-Id: Iee56796c50282beaf1dbeef47f5937fe7fe94a05
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/375181
+Reviewed-by: Joe Downing <joedow@chromium.org>
+Commit-Queue: Alexander Cooper <alcooper@chromium.org>
+Reviewed-by: Alexander Cooper <alcooper@chromium.org>
+Cr-Commit-Position: refs/heads/main@{#43822}
+---
+ .../win/dxgi_adapter_duplicator.cc            | 11 ++++--
+ .../win/dxgi_adapter_duplicator.h             |  2 +-
+ .../win/dxgi_duplicator_controller.cc         | 37 +++++++++++--------
+ .../win/dxgi_duplicator_controller.h          | 10 +++--
+ 4 files changed, 37 insertions(+), 23 deletions(-)
+
+diff --git a/modules/desktop_capture/win/dxgi_adapter_duplicator.cc b/modules/desktop_capture/win/dxgi_adapter_duplicator.cc
+index 88ec4e25bf..e06ed7a898 100644
+--- a/modules/desktop_capture/win/dxgi_adapter_duplicator.cc
++++ b/modules/desktop_capture/win/dxgi_adapter_duplicator.cc
+@@ -164,12 +164,15 @@ int DxgiAdapterDuplicator::screen_count() const {
+   return static_cast<int>(duplicators_.size());
+ }
+ 
+-int64_t DxgiAdapterDuplicator::GetNumFramesCaptured() const {
++int64_t DxgiAdapterDuplicator::GetNumFramesCaptured(int monitor_id) const {
+   int64_t min = INT64_MAX;
+-  for (const auto& duplicator : duplicators_) {
+-    min = std::min(min, duplicator.num_frames_captured());
++  if (monitor_id < 0) {
++    for (const auto& duplicator : duplicators_) {
++      min = std::min(min, duplicator.num_frames_captured());
++    }
++  } else if (static_cast<size_t>(monitor_id) < duplicators_.size()) {
++    min = duplicators_[monitor_id].num_frames_captured();
+   }
+-
+   return min;
+ }
+ 
+diff --git a/modules/desktop_capture/win/dxgi_adapter_duplicator.h b/modules/desktop_capture/win/dxgi_adapter_duplicator.h
+index 5931b51f9e..5948be82ee 100644
+--- a/modules/desktop_capture/win/dxgi_adapter_duplicator.h
++++ b/modules/desktop_capture/win/dxgi_adapter_duplicator.h
+@@ -73,7 +73,7 @@ class DxgiAdapterDuplicator {
+   void Unregister(const Context* const context);
+ 
+   // The minimum num_frames_captured() returned by `duplicators_`.
+-  int64_t GetNumFramesCaptured() const;
++  int64_t GetNumFramesCaptured(int monitor_id) const;
+ 
+   // Moves `desktop_rect_` and all underlying `duplicators_`. See
+   // DxgiDuplicatorController::TranslateRect().
+diff --git a/modules/desktop_capture/win/dxgi_duplicator_controller.cc b/modules/desktop_capture/win/dxgi_duplicator_controller.cc
+index 6fda5a82b8..3663066ea7 100644
+--- a/modules/desktop_capture/win/dxgi_duplicator_controller.cc
++++ b/modules/desktop_capture/win/dxgi_duplicator_controller.cc
+@@ -331,7 +331,7 @@ bool DxgiDuplicatorController::DoDuplicateUnlocked(Context* context,
+                                                    SharedDesktopFrame* target) {
+   Setup(context);
+ 
+-  if (!EnsureFrameCaptured(context, target)) {
++  if (!EnsureFrameCaptured(context, monitor_id, target)) {
+     return false;
+   }
+ 
+@@ -381,12 +381,11 @@ bool DxgiDuplicatorController::DoDuplicateOne(Context* context,
+   return false;
+ }
+ 
+-int64_t DxgiDuplicatorController::GetNumFramesCaptured() const {
++int64_t DxgiDuplicatorController::GetNumFramesCaptured(int monitor_id) const {
+   int64_t min = INT64_MAX;
+   for (const auto& duplicator : duplicators_) {
+-    min = std::min(min, duplicator.GetNumFramesCaptured());
++    min = std::min(min, duplicator.GetNumFramesCaptured(monitor_id));
+   }
+-
+   return min;
+ }
+ 
+@@ -434,6 +433,7 @@ DesktopSize DxgiDuplicatorController::SelectedDesktopSize(
+ }
+ 
+ bool DxgiDuplicatorController::EnsureFrameCaptured(Context* context,
++                                                   int monitor_id,
+                                                    SharedDesktopFrame* target) {
+   // On a modern system, the FPS / monitor refresh rate is usually larger than
+   // or equal to 60. So 17 milliseconds is enough to capture at least one frame.
+@@ -448,7 +448,7 @@ bool DxgiDuplicatorController::EnsureFrameCaptured(Context* context,
+   // called. 500 milliseconds should be enough for ~30 frames.
+   const int64_t timeout_ms = 500;
+ 
+-  if (GetNumFramesCaptured() == 0 && !IsConsoleSession()) {
++  if (GetNumFramesCaptured(monitor_id) == 0 && !IsConsoleSession()) {
+     // When capturing a console session, waiting for a single frame is
+     // sufficient to ensure that DXGI output duplication is working. When the
+     // session is not attached to the console, it has been observed that DXGI
+@@ -460,31 +460,38 @@ bool DxgiDuplicatorController::EnsureFrameCaptured(Context* context,
+     frames_to_skip = 5;
+   }
+ 
+-  if (GetNumFramesCaptured() >= frames_to_skip) {
++  if (GetNumFramesCaptured(monitor_id) >= frames_to_skip) {
+     return true;
+   }
+ 
+   std::unique_ptr<SharedDesktopFrame> fallback_frame;
+   SharedDesktopFrame* shared_frame = nullptr;
+-  if (target->size().width() >= desktop_size().width() &&
+-      target->size().height() >= desktop_size().height()) {
+-    // `target` is large enough to cover entire screen, we do not need to use
+-    // `fallback_frame`.
++  DesktopSize selected_size = SelectedDesktopSize(monitor_id);
++  if (target->size().width() >= selected_size.width() &&
++      target->size().height() >= selected_size.height()) {
++    // `target` is large enough to cover the currently captured screen,
++    // we do not need to use `fallback_frame`.
+     shared_frame = target;
+   } else {
+     fallback_frame = SharedDesktopFrame::Wrap(
+-        std::unique_ptr<DesktopFrame>(new BasicDesktopFrame(desktop_size())));
++        std::unique_ptr<DesktopFrame>(new BasicDesktopFrame(selected_size)));
+     shared_frame = fallback_frame.get();
+   }
+ 
+   const int64_t start_ms = rtc::TimeMillis();
+-  while (GetNumFramesCaptured() < frames_to_skip) {
+-    if (!DoDuplicateAll(context, shared_frame)) {
+-      return false;
++  while (GetNumFramesCaptured(monitor_id) < frames_to_skip) {
++    if (monitor_id < 0) {
++      if (!DoDuplicateAll(context, shared_frame)) {
++        return false;
++      }
++    } else {
++      if (!DoDuplicateOne(context, monitor_id, shared_frame)) {
++        return false;
++      }
+     }
+ 
+     // Calling DoDuplicateAll() may change the number of frames captured.
+-    if (GetNumFramesCaptured() >= frames_to_skip) {
++    if (GetNumFramesCaptured(monitor_id) >= frames_to_skip) {
+       break;
+     }
+ 
+diff --git a/modules/desktop_capture/win/dxgi_duplicator_controller.h b/modules/desktop_capture/win/dxgi_duplicator_controller.h
+index 815986f680..5a92560f26 100644
+--- a/modules/desktop_capture/win/dxgi_duplicator_controller.h
++++ b/modules/desktop_capture/win/dxgi_duplicator_controller.h
+@@ -198,8 +198,10 @@ class RTC_EXPORT DxgiDuplicatorController {
+                       SharedDesktopFrame* target)
+       RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+-  // The minimum GetNumFramesCaptured() returned by `duplicators_`.
+-  int64_t GetNumFramesCaptured() const RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++  // When monitor_id is kFullDesktopScreenId, meaning capturing all screens,
++  // the minimum GetNumFramesCaptured(int monitor_id) returned by duplicators_.
++  int64_t GetNumFramesCaptured(int monitor_id) const
++      RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Returns a DesktopSize to cover entire `desktop_rect_`.
+   DesktopSize desktop_size() const RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+@@ -224,7 +226,9 @@ class RTC_EXPORT DxgiDuplicatorController {
+   // GetNumFramesCaptured() has never reached the requirement.
+   // According to http://crbug.com/682112, dxgi capturer returns a black frame
+   // during first several capture attempts.
+-  bool EnsureFrameCaptured(Context* context, SharedDesktopFrame* target)
++  bool EnsureFrameCaptured(Context* context,
++                           int monitor_id,
++                           SharedDesktopFrame* target)
+       RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Moves `desktop_rect_` and all underlying `duplicators_`, putting top left
+-- 
+2.42.0
+

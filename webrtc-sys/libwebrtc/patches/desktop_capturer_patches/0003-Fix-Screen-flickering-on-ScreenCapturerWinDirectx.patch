@@ -1,0 +1,37 @@
+From decc48fd977ba326cbaa7cf1b516e173af5911ee Mon Sep 17 00:00:00 2001
+From: memetao <meemetao@gmail.com>
+Date: Sun, 10 Dec 2023 14:27:06 +0800
+Subject: [PATCH 03/28] Fix 'Screen flickering on ScreenCapturerWinDirectx'
+
+Bug: webrtc:15718
+Change-Id: I230a0a7d196a4a3aea3b3e47cdf4f47c437e7196
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/330800
+Commit-Queue: Mark Foltz <mfoltz@chromium.org>
+Reviewed-by: Zijie He <zijiehe@chromium.org>
+Reviewed-by: Mark Foltz <mfoltz@chromium.org>
+Cr-Commit-Position: refs/heads/main@{#42177}
+---
+ modules/desktop_capture/win/dxgi_duplicator_controller.cc | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/modules/desktop_capture/win/dxgi_duplicator_controller.cc b/modules/desktop_capture/win/dxgi_duplicator_controller.cc
+index 973aa3fd99..6fda5a82b8 100644
+--- a/modules/desktop_capture/win/dxgi_duplicator_controller.cc
++++ b/modules/desktop_capture/win/dxgi_duplicator_controller.cc
+@@ -500,6 +500,13 @@ bool DxgiDuplicatorController::EnsureFrameCaptured(Context* context,
+     // ensure the video adapter has time to update the screen.
+     webrtc::SleepMs(ms_per_frame);
+   }
++  // When capturing multiple monitors, we need to update the captured region to
++  // prevent flickering by re-setting context. See
++  // https://crbug.com/webrtc/15718 for details.
++  if (shared_frame != target) {
++    context->Reset();
++    Setup(context);
++  }
+   return true;
+ }
+ 
+-- 
+2.42.0
+

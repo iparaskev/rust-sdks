@@ -1,0 +1,59 @@
+From 99c519b3fdac0cbedaecead04a841e89a5f0f69b Mon Sep 17 00:00:00 2001
+From: Florent Castelli <orphis@webrtc.org>
+Date: Thu, 23 May 2024 11:21:53 +0000
+Subject: [PATCH 05/28] Mass removal of absl_deps in all BUILD.gn files
+
+Bug: webrtc:341803749
+Change-Id: Id73844ba8d63b9f2f2c9391d8d8116ad0864c36d
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/351540
+Commit-Queue: Florent Castelli <orphis@webrtc.org>
+Reviewed-by: Harald Alvestrand <hta@webrtc.org>
+Cr-Commit-Position: refs/heads/main@{#42372}
+---
+ modules/desktop_capture/BUILD.gn | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/modules/desktop_capture/BUILD.gn b/modules/desktop_capture/BUILD.gn
+index d0c636a2bc..dcde2c6b52 100644
+--- a/modules/desktop_capture/BUILD.gn
++++ b/modules/desktop_capture/BUILD.gn
+@@ -236,8 +236,8 @@ if (rtc_include_tests) {
+       "../../rtc_base:checks",
+       "../../rtc_base:logging",
+       "../../system_wrappers",
++      "//third_party/abseil-cpp/absl/strings:string_view",
+     ]
+-    absl_deps = [ "//third_party/abseil-cpp/absl/strings" ]
+ 
+     if (is_posix || is_fuchsia) {
+       sources += [
+@@ -277,7 +277,12 @@ if ((is_linux || is_chromeos) && rtc_use_pipewire) {
+ rtc_library("desktop_capture") {
+   visibility = [ "*" ]
+   defines = []
+-  deps = []
++  deps = [
++    "//third_party/abseil-cpp/absl/memory",
++    "//third_party/abseil-cpp/absl/strings",
++    "//third_party/abseil-cpp/absl/strings:string_view",
++    "//third_party/abseil-cpp/absl/types:optional",
++  ]
+   public_configs = [ ":x11_config" ]
+   sources = [
+     "blank_detector_desktop_capturer_wrapper.cc",
+@@ -528,12 +533,6 @@ rtc_library("desktop_capture") {
+     ]
+   }
+ 
+-  absl_deps = [
+-    "//third_party/abseil-cpp/absl/memory",
+-    "//third_party/abseil-cpp/absl/strings",
+-    "//third_party/abseil-cpp/absl/types:optional",
+-  ]
+-
+   if (rtc_use_x11_extensions) {
+     deps += [ "../../rtc_base:sanitizer" ]
+   }
+-- 
+2.42.0
+

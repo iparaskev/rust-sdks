@@ -1,0 +1,40 @@
+From 5bfcc873d922e9075798f29141c99c0f6ae3501e Mon Sep 17 00:00:00 2001
+From: Evan Shrubsole <eshr@google.com>
+Date: Tue, 23 Apr 2024 08:51:23 +0000
+Subject: [PATCH 02/28] Add event scope to all TRACE_EVENT_INSTANTs
+
+These are required by the Perfetto API and the missing argument prevents
+the use of Perfetto.
+
+Bug: webrtc:15917
+Change-Id: Ie40c0344dc9d8cd40f7c751b133d150b975a33c7
+Reviewed-on: https://webrtc-review.googlesource.com/c/src/+/347702
+Reviewed-by: Mirko Bonadei <mbonadei@webrtc.org>
+Reviewed-by: Tomas Gunnarsson <tommi@webrtc.org>
+Commit-Queue: Evan Shrubsole <eshr@google.com>
+Cr-Commit-Position: refs/heads/main@{#42147}
+---
+ modules/desktop_capture/mac/screen_capturer_mac.mm | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/modules/desktop_capture/mac/screen_capturer_mac.mm b/modules/desktop_capture/mac/screen_capturer_mac.mm
+index 60089fd0f2..e6746578ad 100644
+--- a/modules/desktop_capture/mac/screen_capturer_mac.mm
++++ b/modules/desktop_capture/mac/screen_capturer_mac.mm
+@@ -178,8 +178,11 @@ void ScreenCapturerMac::Start(Callback* callback) {
+   RTC_DCHECK(thread_checker_.IsCurrent());
+   RTC_DCHECK(!callback_);
+   RTC_DCHECK(callback);
+-  TRACE_EVENT_INSTANT1(
+-      "webrtc", "ScreenCapturermac::Start", "target display id ", current_display_);
++  TRACE_EVENT_INSTANT1("webrtc",
++                       "ScreenCapturermac::Start",
++                       TRACE_EVENT_SCOPE_GLOBAL,
++                       "target display id ",
++                       current_display_);
+ 
+   callback_ = callback;
+   // Start and operate CGDisplayStream handler all from capture thread.
+-- 
+2.42.0
+
